@@ -97,6 +97,10 @@
 #include "factories/mario_artist/MA2D1Factory.h"
 #endif
 
+#ifdef SSB64_SUPPORT
+#include "factories/ssb64/RelocFactory.h"
+#endif
+
 #ifdef NAUDIO_SUPPORT
 #include "factories/naudio/v0/AudioHeaderFactory.h"
 #include "factories/naudio/v0/BankFactory.h"
@@ -234,6 +238,10 @@ void Companion::Init(const ExportType type, std::atomic<size_t>& assetCount) {
 
 #ifdef MARIO_ARTIST_SUPPORT
     this->RegisterFactory("MA:MA2D1", std::make_shared<MA::MA2D1Factory>());
+#endif
+
+#ifdef SSB64_SUPPORT
+    this->RegisterFactory("SSB64:RELOC", std::make_shared<SSB64::RelocFactory>());
 #endif
 
 #ifdef NAUDIO_SUPPORT

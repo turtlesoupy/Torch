@@ -77,6 +77,9 @@ enum class ResourceType {
     AdpcmLoop = 0x4150434C,    // APCL
     AdpcmBook = 0x41504342,    // APCB
     Envelope = 0x45564C50,     // EVLP
-    AudioTable = 0x4154424C    // ATBL
+    AudioTable = 0x4154424C,   // ATBL
+
+    // SSB64
+    SSB64Reloc = 0x52454C4F,  // RELO
 };
 } // namespace Torch
