@@ -1101,7 +1101,24 @@ void Companion::Process(std::atomic<size_t>& assetCount) {
         this->gCartridge->Initialize();
 
         if (!config[this->gCartridge->GetHash()]) {
-            SPDLOG_ERROR("No config found for {}", this->gCartridge->GetHash());
+            SPDLOG_ERROR("ROM not recognized.");
+            SPDLOG_ERROR("  Got SHA-1: {}", this->gCartridge->GetHash());
+            SPDLOG_ERROR("  Title:    \"{}\"  Country: {}  Version: {}",
+                         this->gCartridge->GetGameTitle(),
+                         this->gCartridge->GetCountryCode(),
+                         this->gCartridge->GetVersion());
+            SPDLOG_ERROR("Supported SHA-1 hashes (from config.yml):");
+            for (const auto& entry : config) {
+                if (!entry.first.IsScalar()) continue;
+                const auto key = entry.first.as<std::string>();
+                if (key.size() != 40) continue; // skip non-hash top-level keys
+                std::string name;
+                if (entry.second.IsMap() && entry.second["name"]) {
+                    name = entry.second["name"].as<std::string>();
+                }
+                SPDLOG_ERROR("  {}  {}", key, name);
+            }
+            SPDLOG_ERROR("Re-dump from a known-good cartridge or verify your file matches one of the hashes above.");
             return;
         }
 
