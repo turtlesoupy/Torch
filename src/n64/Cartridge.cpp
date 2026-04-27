@@ -3,6 +3,39 @@
 #include "lib/binarytools/BinaryReader.h"
 #include <Companion.h>
 
+bool N64::Cartridge::Normalize(std::vector<uint8_t>& romData) {
+    if (romData.size() < 4) {
+        return false;
+    }
+    const uint8_t b0 = romData[0];
+    const uint8_t b1 = romData[1];
+    const uint8_t b2 = romData[2];
+    const uint8_t b3 = romData[3];
+
+    // .z64 — big-endian, already canonical
+    if (b0 == 0x80 && b1 == 0x37 && b2 == 0x12 && b3 == 0x40) {
+        return true;
+    }
+    // .v64 — byteswapped (each u16 has its two bytes swapped)
+    if (b0 == 0x37 && b1 == 0x80 && b2 == 0x40 && b3 == 0x12) {
+        const size_t n = romData.size() & ~size_t{1};
+        for (size_t i = 0; i < n; i += 2) {
+            std::swap(romData[i], romData[i + 1]);
+        }
+        return true;
+    }
+    // .n64 — little-endian (each u32 has its four bytes reversed)
+    if (b0 == 0x40 && b1 == 0x12 && b2 == 0x37 && b3 == 0x80) {
+        const size_t n = romData.size() & ~size_t{3};
+        for (size_t i = 0; i < n; i += 4) {
+            std::swap(romData[i + 0], romData[i + 3]);
+            std::swap(romData[i + 1], romData[i + 2]);
+        }
+        return true;
+    }
+    return false;
+}
+
 void N64::Cartridge::Initialize() {
     LUS::BinaryReader reader((char*)this->gRomData.data(), this->gRomData.size());
     reader.SetEndianness(Torch::Endianness::Big);

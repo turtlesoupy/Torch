@@ -1093,6 +1093,10 @@ void Companion::Process(std::atomic<size_t>& assetCount) {
             input.close();
         }
 
+        if (!N64::Cartridge::Normalize(this->gRomData)) {
+            SPDLOG_WARN("Unrecognized ROM byte order; expected .z64 / .n64 / .v64. Continuing as-is.");
+        }
+
         this->gCartridge = std::make_shared<N64::Cartridge>(this->gRomData);
         this->gCartridge->Initialize();
 
