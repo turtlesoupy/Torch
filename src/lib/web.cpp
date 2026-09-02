@@ -21,8 +21,30 @@
 #include <string>
 #include <vector>
 
+#ifdef TORCH_WEB_STAGE_ASSETS
+#include "stage_assets_derive.h"
+#endif
 
 extern "C" {
+
+// Derive the port-added stages' CSS wallpaper/thumbnail PNGs into
+// <dst_dir>/assets/css_icons/. Returns the number of stages derived, or -1
+// when the module was built without the host derivation source.
+EMSCRIPTEN_KEEPALIVE
+int torch_derive_stage_assets(const uint8_t* rom, int rom_len, const char* dst_dir) {
+#ifdef TORCH_WEB_STAGE_ASSETS
+    try {
+        return ssb64_derive_css_stage_assets(rom, (size_t)rom_len, dst_dir);
+    } catch (const std::exception& e) {
+        SPDLOG_ERROR("torch_derive_stage_assets: {}", e.what());
+        return 0;
+    }
+#else
+    (void)rom; (void)rom_len; (void)dst_dir;
+    return -1;
+#endif
+}
+
 
 // Returns 0 on success, 1 on a std::exception, 2 on an unknown exception.
 // A recognised-but-unsupported ROM returns 0 with no archive written (Process

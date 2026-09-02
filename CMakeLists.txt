@@ -31,10 +31,15 @@ if(EMSCRIPTEN)
     # runs inside a Web Worker. src/lib/web.cpp exports torch_extract_o2r;
     # the caller stages the ROM + recipe tree into MEMFS and reads the
     # archive back out, so only FS + the C export need to be reachable.
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createTorchModule -sENVIRONMENT=web,worker,node -sALLOW_MEMORY_GROWTH=1 -sNO_DISABLE_EXCEPTION_CATCHING -sEXPORT_EXCEPTION_HANDLING_HELPERS=1 -sEXPORTED_FUNCTIONS=['_torch_extract_o2r','_malloc','_free'] -sEXPORTED_RUNTIME_METHODS=['FS','ccall','cwrap','HEAPU8','getExceptionMessage']")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createTorchModule -sENVIRONMENT=web,worker,node -sALLOW_MEMORY_GROWTH=1 -sNO_DISABLE_EXCEPTION_CATCHING -sEXPORT_EXCEPTION_HANDLING_HELPERS=1 -sEXPORTED_FUNCTIONS=['_torch_extract_o2r','_torch_derive_stage_assets','_malloc','_free'] -sEXPORTED_RUNTIME_METHODS=['FS','ccall','cwrap','HEAPU8','getExceptionMessage']")
     if(EMSCRIPTEN_PRELOAD)
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --preload-file ${EMSCRIPTEN_PRELOAD}")
     endif()
+    # Host-project sources compiled into the browser module (e.g. BattleShip's
+    # port/css_icons/stage_assets_derive.cpp, exported by src/lib/web.cpp).
+    set(TORCH_WEB_EXTRA_SOURCES "" CACHE STRING "Extra source files linked into the Emscripten torch module")
+    set(TORCH_WEB_EXTRA_INCLUDES "" CACHE STRING "Extra include directories for TORCH_WEB_EXTRA_SOURCES")
+    set(TORCH_WEB_EXTRA_DEFINES "" CACHE STRING "Extra compile definitions for the Emscripten torch module")
 endif()
 
 ################################################################################
@@ -137,7 +142,13 @@ endif()
 # Build
 if (USE_STANDALONE)
     add_definitions(-DSTANDALONE)
-    add_executable(${PROJECT_NAME} ${SRC_DIR})
+    add_executable(${PROJECT_NAME} ${SRC_DIR} ${TORCH_WEB_EXTRA_SOURCES})
+    if(EMSCRIPTEN AND TORCH_WEB_EXTRA_INCLUDES)
+        target_include_directories(${PROJECT_NAME} PRIVATE ${TORCH_WEB_EXTRA_INCLUDES})
+    endif()
+    if(EMSCRIPTEN AND TORCH_WEB_EXTRA_DEFINES)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE ${TORCH_WEB_EXTRA_DEFINES})
+    endif()
 	set(LINK_TYPE "MD")
 else()
     add_library(${PROJECT_NAME} STATIC ${SRC_DIR})
