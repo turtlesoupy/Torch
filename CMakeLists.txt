@@ -25,15 +25,26 @@ if(EMSCRIPTEN)
     add_definitions(-D__EMSCRIPTEN__)
     # Torch uses exceptions for control flow; Emscripten compiles catch
     # blocks out unless the flag is present at compile time as well as link.
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sNO_DISABLE_EXCEPTION_CATCHING")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -sNO_DISABLE_EXCEPTION_CATCHING")
+    # add_compile_options rather than CMAKE_CXX_FLAGS: the global flags leak
+    # into CMake's try_compile probes (FindThreads' -pthread check fails
+    # with an emcc "linker setting" complaint and spdlog's configure aborts).
+    add_compile_options(-sNO_DISABLE_EXCEPTION_CATCHING)
     # Browser extraction module: a plain ES module (createTorchModule) that
     # runs inside a Web Worker. src/lib/web.cpp exports torch_extract_o2r;
     # the caller stages the ROM + recipe tree into MEMFS and reads the
     # archive back out, so only FS + the C export need to be reachable.
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createTorchModule -sENVIRONMENT=web,worker,node -sALLOW_MEMORY_GROWTH=1 -sNO_DISABLE_EXCEPTION_CATCHING -sEXPORT_EXCEPTION_HANDLING_HELPERS=1 -sEXPORTED_FUNCTIONS=['_torch_extract_o2r','_torch_derive_stage_assets','_malloc','_free'] -sEXPORTED_RUNTIME_METHODS=['FS','ccall','cwrap','HEAPU8','getExceptionMessage']")
+    # Applied per-target (see target_link_options below), NOT via
+    # CMAKE_EXE_LINKER_FLAGS: global linker flags leak into CMake's
+    # try_compile probes, where --export of our symbols fails and FindThreads
+    # (spdlog) concludes the compiler cannot link at all.
+    set(TORCH_WEB_LINK_OPTIONS
+        -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createTorchModule
+        -sENVIRONMENT=web,worker,node -sALLOW_MEMORY_GROWTH=1
+        -sNO_DISABLE_EXCEPTION_CATCHING -sEXPORT_EXCEPTION_HANDLING_HELPERS=1
+        "-sEXPORTED_FUNCTIONS=['_torch_extract_o2r','_torch_derive_stage_assets','_malloc','_free']"
+        "-sEXPORTED_RUNTIME_METHODS=['FS','ccall','cwrap','HEAPU8','getExceptionMessage']")
     if(EMSCRIPTEN_PRELOAD)
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --preload-file ${EMSCRIPTEN_PRELOAD}")
+        list(APPEND TORCH_WEB_LINK_OPTIONS "--preload-file ${EMSCRIPTEN_PRELOAD}")
     endif()
     # Host-project sources compiled into the browser module (e.g. BattleShip's
     # port/css_icons/stage_assets_derive.cpp, exported by src/lib/web.cpp).
@@ -148,6 +159,9 @@ if (USE_STANDALONE)
     endif()
     if(EMSCRIPTEN AND TORCH_WEB_EXTRA_DEFINES)
         target_compile_definitions(${PROJECT_NAME} PRIVATE ${TORCH_WEB_EXTRA_DEFINES})
+    endif()
+    if(EMSCRIPTEN)
+        target_link_options(${PROJECT_NAME} PRIVATE ${TORCH_WEB_LINK_OPTIONS})
     endif()
 	set(LINK_TYPE "MD")
 else()
