@@ -1,53 +1,58 @@
 #ifdef __EMSCRIPTEN__
+// web.cpp — Emscripten entry point for in-browser asset extraction.
+//
+// The standalone CLI (main.cpp) is compiled out under __EMSCRIPTEN__; the
+// browser drives Torch through this single C export instead, mirroring
+// BattleShip's Android bridge: construct a Companion over the ROM bytes,
+// register factories via Init, then run Process manually (Init skips it on
+// Emscripten so the caller controls when the heavy work happens).
+//
+// The source dir must hold config.yml + the recipe yamls; the destination
+// dir receives the archive named by config.yml's output.binary. Both live in
+// MEMFS — the caller stages them and reads the result back out.
 #include "Companion.h"
 
-#include <emscripten/bind.h>
-using namespace emscripten;
+#include <emscripten.h>
+#include <spdlog/spdlog.h>
 
-Companion* Companion::Instance;
+#include <atomic>
+#include <cstdint>
+#include <exception>
+#include <string>
+#include <vector>
 
-void Bind(Companion* instance) {
-    Companion::Instance = instance;
+
+extern "C" {
+
+// Returns 0 on success, 1 on a std::exception, 2 on an unknown exception.
+// A recognised-but-unsupported ROM returns 0 with no archive written (Process
+// logs the reason), so callers must also check the output file exists.
+EMSCRIPTEN_KEEPALIVE
+int torch_extract_o2r(const uint8_t* rom, int rom_len, const char* src_dir, const char* dst_dir) {
+    Companion* instance = nullptr;
+    try {
+        std::vector<uint8_t> data(rom, rom + rom_len);
+        instance = new Companion(std::move(data), ArchiveType::O2R, /*debug=*/false,
+                                 /*modding=*/false, std::string(src_dir), std::string(dst_dir));
+        Companion::Instance = instance;
+        std::atomic<size_t> assetCount{ 0 };
+        instance->Init(ExportType::Binary, assetCount);
+        instance->Process(assetCount);
+        Companion::Instance = nullptr;
+        delete instance;
+        return 0;
+    } catch (const std::exception& e) {
+        SPDLOG_ERROR("torch_extract_o2r: {}", e.what());
+    } catch (...) {
+        SPDLOG_ERROR("torch_extract_o2r: unknown exception");
+        Companion::Instance = nullptr;
+        delete instance;
+        return 2;
+    }
+    Companion::Instance = nullptr;
+    delete instance;
+    return 1;
 }
 
-EMSCRIPTEN_BINDINGS(Torch) {
-    register_vector<uint8_t>("VectorUInt8");
-
-    function("Bind", &Bind, allow_raw_pointers());
-
-    enum_<ExportType>("ExportType")
-        .value("Header", ExportType::Header)
-        .value("Code", ExportType::Code)
-        .value("Binary", ExportType::Binary)
-        .value("Modding", ExportType::Modding)
-        .value("XML", ExportType::XML);
-
-    enum_<ArchiveType>("ArchiveType")
-        .value("None", ArchiveType::None)
-        .value("OTR", ArchiveType::OTR)
-        .value("O2R", ArchiveType::O2R);
-
-    enum_<N64::CountryCode>("CountryCode")
-        .value("Japan", N64::CountryCode::Japan)
-        .value("NorthAmerica", N64::CountryCode::NorthAmerica)
-        .value("Europe", N64::CountryCode::Europe)
-        .value("Unknown", N64::CountryCode::Unknown);
-
-    class_<N64::Cartridge>("Cartridge")
-        .function("GetGameTitle", &N64::Cartridge::GetGameTitle)
-        .function("GetCountryCode", &N64::Cartridge::GetCountryCode)
-        .function("GetCountry", &N64::Cartridge::GetCountry)
-        .function("GetVersion", &N64::Cartridge::GetVersion)
-        .function("GetHash", &N64::Cartridge::GetHash)
-        .function("GetCRC", &N64::Cartridge::GetCRC);
-
-    class_<Companion>("Companion")
-        .constructor<std::vector<uint8_t>, ArchiveType, bool, bool, std::string, std::string>()
-        .constructor<std::vector<uint8_t>, ArchiveType, bool, bool, std::string>()
-        .constructor<std::vector<uint8_t>, ArchiveType, bool, bool>()
-        .function("Init", &Companion::Init)
-        .function("GetCartridge", &Companion::GetCartridge, allow_raw_pointers())
-        .function("Process", &Companion::Process)
-        .function("GetRomData", &Companion::GetRomData, allow_raw_pointers());
 }
 #endif

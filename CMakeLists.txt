@@ -23,7 +23,15 @@ option(BUILD_NAUDIO "Build with NAudio support" ON)
 if(EMSCRIPTEN)
     set(BUILD_SM64 OFF) # TODO: This is broken for some reason
     add_definitions(-D__EMSCRIPTEN__)
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --bind -lidbfs.js -s MODULARIZE=1 -s EXPORT_ES6=1 -s NO_DISABLE_EXCEPTION_CATCHING -s ALLOW_MEMORY_GROWTH=1 -s EXPORT_NAME=createModule -s EXPORTED_RUNTIME_METHODS='[\"FS\", \"IDBFS\"]'")
+    # Torch uses exceptions for control flow; Emscripten compiles catch
+    # blocks out unless the flag is present at compile time as well as link.
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sNO_DISABLE_EXCEPTION_CATCHING")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -sNO_DISABLE_EXCEPTION_CATCHING")
+    # Browser extraction module: a plain ES module (createTorchModule) that
+    # runs inside a Web Worker. src/lib/web.cpp exports torch_extract_o2r;
+    # the caller stages the ROM + recipe tree into MEMFS and reads the
+    # archive back out, so only FS + the C export need to be reachable.
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createTorchModule -sENVIRONMENT=web,worker,node -sALLOW_MEMORY_GROWTH=1 -sNO_DISABLE_EXCEPTION_CATCHING -sEXPORT_EXCEPTION_HANDLING_HELPERS=1 -sEXPORTED_FUNCTIONS=['_torch_extract_o2r','_malloc','_free'] -sEXPORTED_RUNTIME_METHODS=['FS','ccall','cwrap','HEAPU8','getExceptionMessage']")
     if(EMSCRIPTEN_PRELOAD)
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --preload-file ${EMSCRIPTEN_PRELOAD}")
     endif()
